@@ -261,7 +261,7 @@
 const $ = id => document.getElementById(id);
 // this page's version; version.txt next to it is fetched past every cache, and a newer one reloads the page, so a
 // phone (or a page on its home screen) never keeps an old copy
-const PAGE_VERSION = '202611090200';
+const PAGE_VERSION = '202611091000';
 async function checkVersion() {
   try {
     const v = (await (await fetch('version.txt?' + Date.now(), {cache: 'no-store'})).text()).trim();
@@ -319,7 +319,10 @@ async function signIn() {
 function signOut() { localStorage.removeItem('eo1remote'); cfg = null; location.reload(); }
 
 // ---------------------------------------------------------------------------------------------- live (ntfy)
-let live = lsGet('eo1live');      // {s: server, t: topic, k: key}
+let live = lsGet('eo1live');      // {s: server, t: topic, k: key, a: access token (only on a server that has them)}
+// ntfy takes the token in the address too (?auth=): the only way for EventSource, and a POST without extra headers
+// needs no CORS preflight
+const liveAuth = () => live && live.a ? '?auth=' + tb64(new TextEncoder().encode('Bearer ' + live.a)) : '';
 let liveSt = {}, liveKeys = null, liveLast = 0, liveWatchTimer = null, liveSource = null, liveAsked = '';
 // small pictures the EO1 sent once, kept in this browser by picture id: shown at once the next time
 const thumbGet = id => { try { return id ? localStorage.getItem('eo1thumb:' + id) : null; } catch (e) { return null; } };
@@ -410,15 +413,15 @@ async function liveSend(cmd, quiet) {
   }
   try {
     const body = await seal('c', {...cmd, ts: Date.now(), n: tb64(crypto.getRandomValues(new Uint8Array(12)))});
-    const r = await fetch(`${live.s}/${live.t}-c`, {method: 'POST', body});
+    const r = await fetch(`${live.s}/${live.t}-c${liveAuth()}`, {method: 'POST', body});
     if (r.status === 429) {
-      // ntfy.sh counts messages per day per network (home Wi-Fi: the EO1 and the phone share it);
-      // ntfy.zap.pm (the default) and your own server have no daily limit, only a short burst limit
+      // ntfy.sh counts messages per day per network (home Wi-Fi: the EO1 and the phone share it); an own server
+      // has no daily limit, only a short burst limit
       const pub = /^https:\/\/ntfy\.sh$/.test(live.s);
       const msg = pub
         ? 'The free ntfy.sh relay has reached its daily message limit for this network. The live remote works ' +
-          'again within a day; the EO1 itself keeps playing. No daily limit: choose ntfy.zap.pm on the control ' +
-          'page at home (Live from anywhere > Another ntfy server).'
+          'again within a day; the EO1 itself keeps playing. No daily limit: your own ntfy server ' +
+          '(control page at home: Live from anywhere > Your own ntfy server).'
         : 'Too many messages at once. Wait a minute and try again; the EO1 itself keeps playing.';
       $('liveDot').classList.remove('on'); $('liveState').textContent = pub ? 'daily limit reached' : 'busy, try again soon';
       $('liveSub').textContent = msg;
@@ -530,7 +533,7 @@ function liveConnect() {
   $('pairHint').style.display = 'none';
   // GitHub's own screen and brightness controls are slower duplicates when the live remote is there
   for (const id of ['screen-on', 'br']) { const card = $(id).closest('section'); if (card) card.style.display = 'none'; }
-  liveSource = new EventSource(`${live.s}/${live.t}-s/sse`);
+  liveSource = new EventSource(`${live.s}/${live.t}-s/sse${liveAuth()}`);
   liveSource.onmessage = async ev => {
     try {
       const m = JSON.parse(ev.data);
@@ -558,7 +561,7 @@ function liveForget() {
   if (!m) return;
   try {
     const p = JSON.parse(new TextDecoder().decode(ub64(m[1])));
-    if (/^https:\/\//.test(p.s) && /^[\w-]{8,64}$/.test(p.t) && ub64(p.k).length === 32) {
+    if (/^https:\/\//.test(p.s) && /^[\w-]{8,64}$/.test(p.t) && ub64(p.k).length === 32 && (!p.a || /^[\w-]{8,80}$/.test(p.a))) {
       live = p; localStorage.setItem('eo1live', JSON.stringify(p)); toast('Paired with your EO1');
     }
   } catch (e) {}
