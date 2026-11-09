@@ -412,10 +412,15 @@ async function liveSend(cmd, quiet) {
     const body = await seal('c', {...cmd, ts: Date.now(), n: tb64(crypto.getRandomValues(new Uint8Array(12)))});
     const r = await fetch(`${live.s}/${live.t}-c`, {method: 'POST', body});
     if (r.status === 429) {
-      // the free ntfy.sh server counts messages per day per network (home Wi-Fi: the EO1 and the phone share it)
-      const msg = 'The free ntfy.sh relay has reached its daily message limit for this network. ' +
-        'The live remote works again within a day; the EO1 itself keeps playing.';
-      $('liveDot').classList.remove('on'); $('liveState').textContent = 'daily limit reached';
+      // ntfy.sh counts messages per day per network (home Wi-Fi: the EO1 and the phone share it);
+      // ntfy.zap.pm (the default) and your own server have no daily limit, only a short burst limit
+      const pub = /^https:\/\/ntfy\.sh$/.test(live.s);
+      const msg = pub
+        ? 'The free ntfy.sh relay has reached its daily message limit for this network. The live remote works ' +
+          'again within a day; the EO1 itself keeps playing. No daily limit: choose ntfy.zap.pm on the control ' +
+          'page at home (Live from anywhere > Another ntfy server).'
+        : 'Too many messages at once. Wait a minute and try again; the EO1 itself keeps playing.';
+      $('liveDot').classList.remove('on'); $('liveState').textContent = pub ? 'daily limit reached' : 'busy, try again soon';
       $('liveSub').textContent = msg;
       liveBusy(null); toast(msg, 8000); return;
     }
