@@ -261,7 +261,7 @@
 const $ = id => document.getElementById(id);
 // this page's version; version.txt next to it is fetched past every cache, and a newer one reloads the page, so a
 // phone (or a page on its home screen) never keeps an old copy
-const PAGE_VERSION = '202611091000';
+const PAGE_VERSION = '202611091100';
 async function checkVersion() {
   try {
     const v = (await (await fetch('version.txt?' + Date.now(), {cache: 'no-store'})).text()).trim();
@@ -415,13 +415,13 @@ async function liveSend(cmd, quiet) {
     const body = await seal('c', {...cmd, ts: Date.now(), n: tb64(crypto.getRandomValues(new Uint8Array(12)))});
     const r = await fetch(`${live.s}/${live.t}-c${liveAuth()}`, {method: 'POST', body});
     if (r.status === 429) {
-      // ntfy.sh counts messages per day per network (home Wi-Fi: the EO1 and the phone share it); an own server
-      // has no daily limit, only a short burst limit
+      // ntfy.sh counts messages per day per network (home Wi-Fi: the EO1 and the phone share it); ntfy.zap.pm
+      // (the default) and an own server only slow down a flood
       const pub = /^https:\/\/ntfy\.sh$/.test(live.s);
       const msg = pub
         ? 'The free ntfy.sh relay has reached its daily message limit for this network. The live remote works ' +
-          'again within a day; the EO1 itself keeps playing. No daily limit: your own ntfy server ' +
-          '(control page at home: Live from anywhere > Your own ntfy server).'
+          'again within a day; the EO1 itself keeps playing. Without that limit: ntfy.zap.pm, the default ' +
+          '(control page at home: Live from anywhere > Another ntfy server).'
         : 'Too many messages at once. Wait a minute and try again; the EO1 itself keeps playing.';
       $('liveDot').classList.remove('on'); $('liveState').textContent = pub ? 'daily limit reached' : 'busy, try again soon';
       $('liveSub').textContent = msg;
